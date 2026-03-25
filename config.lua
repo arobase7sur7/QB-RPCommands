@@ -1,7 +1,7 @@
 Config = {}
 
 -- Change this to your webhook link
-Config.discordwebhooklink = 'https://discord.com/api/webhooks/1486277163517874246/5JdYBBHalMmJYnmny4RxkNRCcNyl4Z_QabBXW-hdZuMOMDuMnXVGayfW2kf3IC2sBBoJ' 
+Config.discordwebhooklink = 'WEBHOOK' 
 
 -- Discord avatar image for webhooks
 DISCORD_IMAGE = 'https://i.imgur.com/placeholder.png'
