@@ -3,7 +3,7 @@ game 'gta5'
 
 author 'Swqppingg (initial release) / arobase7sur7 (QB-Core fork and optimizations)'
 description 'QB-Core Roleplay Command Pack - Enhanced fork with QB-Core support and optimizations'
-version '1.0.2'
+version '1.0.0'
 
 dependencies {
     'qb-core'
