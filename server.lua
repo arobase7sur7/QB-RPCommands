@@ -122,7 +122,7 @@ local function sendRoleplayMessage(source, args, commandKey)
                     title = cfg.webhook or cfg.title,
                     description = "**Player:** " .. displayIdentity .. "\n**Message:** " .. cleanMessage,
                     color = embedColor,
-                    footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
+                    footer = { text = "ID: " .. source .. " | Name: " .. playerName }
                 }},
                 avatar_url = DISCORD_IMAGE
             }), 
@@ -186,7 +186,7 @@ local function RegisterAllCommands()
                             title = "Dispatch",
                             description = "**From:** " .. cleanName .. " (**" .. jobLabel .. "**)\n**Message:** " .. cleanMessage,
                             color = embedColor,
-                            footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
+                            footer = { text = "ID: " .. source .. " | Name: " .. playerName }
                         }},
                         avatar_url = DISCORD_IMAGE
                     }), 
