@@ -1,7 +1,14 @@
 fx_version 'adamant'
 game 'gta5'
-description 'Roleplay Command Pack'
+
+author 'Swqppingg (initial release) / arobase7sur7 (QB-Core fork and optimizations)'
+description 'QB-Core Roleplay Command Pack - Enhanced fork with QB-Core support and optimizations'
+version '1.0.2'
+
+dependencies {
+    'qb-core'
+}
 
 client_script 'client.lua'
-server_script 'config.lua'
+shared_script 'config.lua'
 server_script 'server.lua'

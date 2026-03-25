@@ -1,163 +1,261 @@
--- Twitter Command
-if Config.twitter then
-RegisterCommand("twt", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        local steam = GetPlayerName(source)
-        args = table.concat(args, ' ')
-        TriggerClientEvent('chatMessage', -1, "TWITTER | ".. GetPlayerName(source) .."", { 30, 144, 255 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**TWITTER:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
-    end
+QBCore = exports['qb-core']:GetCoreObject()
+
+Citizen.CreateThread(function()
+    Citizen.Wait(1000)
+    print("^3[QB-RPCommands]^7 Initialized successfully")
 end)
+
+local function GetAge(birthdate)
+    if not birthdate or birthdate == "Unknown" then return "N/A" end
+    local year = string.match(birthdate, "(%d%d%d%d)")
+    if not year then return "N/A" end
+    local currentYear = tonumber(os.date("%Y"))
+    local birthYear = tonumber(year)
+    return currentYear - birthYear
 end
 
--- Dispatch Command
-if Config.dispatch then
-RegisterCommand("dispatch", function(source, args, raw)
-        if #args <= 0 then
+local function GetPlayerDisplayName(source)
+    local player = QBCore.Functions.GetPlayer(source)
+    if not player then return GetPlayerName(source) end
+    local charinfo = player.PlayerData.charinfo
+    local initial = string.sub(charinfo.lastname, 1, 1)
+    local qbName = charinfo.firstname .. " " .. initial .. "."
+    local nickname = Config.GetNickname(source)
+    return nickname or qbName
+end
+
+local function HasJobAccess(source, jobList)
+    local player = QBCore.Functions.GetPlayer(source)
+    if not player then return false end
+    local playerJob = player.PlayerData.job.name
+    for _, job in ipairs(jobList) do
+        if playerJob == job then return true end
+    end
+    return false
+end
+
+local PlayerSeeds = {}
+
+local function HexToRgb(hex)
+    hex = hex:gsub("#", "")
+    if #hex == 8 then hex = hex:sub(1, 6) end
+    return { tonumber("0x" .. hex:sub(1, 2)), tonumber("0x" .. hex:sub(3, 4)), tonumber("0x" .. hex:sub(5, 6)) }
+end
+
+local function HexToDec(hex)
+    hex = hex:gsub("#", "")
+    if #hex == 8 then hex = hex:sub(1, 6) end
+    return tonumber(hex, 16)
+end
+
+local function StripColorCodes(text)
+    if not text then return "" end
+    local s = text
+    s = s:gsub("%^%d", "")
+    s = s:gsub("%^#%x%x%x%x%x%x%x%x", "")
+    s = s:gsub("%^#%x%x%x%x%x%x", "")
+    s = s:gsub("%^[*_~iur]", "")
+    return s
+end
+
+local function sendRoleplayMessage(source, args, commandKey)
+    local cfg = Config.Commands[commandKey]
+    if not cfg then return end
+    if #args <= 0 then
         TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        TriggerClientEvent('chatMessage', -1, "Dispatch | ".. GetPlayerName(source) .."", { 30, 144, 255 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**DISPATCH:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
+        return
     end
-end)
-end
-
--- Darkweb Command
-if Config.darkweb then
-RegisterCommand("darkweb", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        local steam = GetPlayerName(source)
-        args = table.concat(args, ' ')
-        TriggerClientEvent('chatMessage', -1, "Dark Web", { 33, 33, 38 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**DARKWEB:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
+    local player = QBCore.Functions.GetPlayer(source)
+    if not player then return end
+    local message = table.concat(args, " ")
+    local playerName = GetPlayerName(source)
+    local displayName = GetPlayerDisplayName(source)
+    local logDisplayName = displayName
+    if commandKey == "darkweb" then
+        if not PlayerSeeds[source] then PlayerSeeds[source] = math.random(100, 999) end
+        local charHash = string.sub(player.PlayerData.citizenid, #player.PlayerData.citizenid - 1)
+        displayName = "User_" .. PlayerSeeds[source] .. charHash
     end
-end)
-end
-
--- News Command
-if Config.news then
-RegisterCommand("news", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        local steam = GetPlayerName(source)
-        args = table.concat(args, ' ')
-        TriggerClientEvent('chatMessage', -1, "NEWS | ".. GetPlayerName(source) .."", { 194, 255, 51 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**NEWS:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
+    local chatColor = cfg.color
+    if type(chatColor) == "table" then
+        chatColor = string.format("#%02x%02x%02x", chatColor[1], chatColor[2], chatColor[3])
     end
-end)
-end
-
--- Do Command
-if Config.doo then
-RegisterCommand("do", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        TriggerClientEvent('chatMessage', -1, "Do | ".. GetPlayerName(source) .."", { 51, 153, 255 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**DO:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
-    end
-end)
-end
-
--- OOC Command
-if Config.ooc then
-RegisterCommand("ooc", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        local steam = GetPlayerName(source)
-        args = table.concat(args, ' ')
-        TriggerClientEvent('chatMessage', -1, "OOC | ".. GetPlayerName(source) .."", { 128, 128, 128 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**OOC:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
-    end
-end)
-end
-
--- Me Command
-if Config.me then
-RegisterCommand("me", function(source, args, raw)
-        if #args <= 0 then
-        TriggerClientEvent('chatMessage', source, Config.missingargs)
-        else
-        local message = table.concat(args, " ")
-        local steam = GetPlayerName(source)
-        args = table.concat(args, ' ')
-        TriggerClientEvent('chatMessage', -1, "Me | ".. GetPlayerName(source) .."", { 255, 0, 0 }, message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = "**ME:** ".. message .."", avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
-    end
-end)
-end
-
--- ShowID Command
-if Config.showid then
-RegisterCommand("showid", function(source, color, msg)
-	cm = stringsplit(msg, " ")
-		CancelEvent()
-		if tablelength(cm) == 3 then
-			local firstname = tostring(cm[2])
-			local lastname = tostring(cm[3])
-            local steam = GetPlayerName(source)
-		    TriggerClientEvent("sendMessageShowID", -1, source, firstname, lastname)
-            PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', json.encode({username = steam, content = '**ShowID** | **First Name:** ' .. firstname .. ' **Last Name:** ' .. lastname .. '', avatar_url = DISCORD_IMAGE}), { ['Content-Type'] = 'application/json' })
-            
-		else
-		    TriggerClientEvent('chatMessage', source, "Use the following format:", {255, 0, 0}, "/showid [First Name] [Last Name]")
-	    end
-	end)
-end
-
-
-  
-function stringsplit(inputstr, sep)
-    if sep == nil then
-        sep = "%s"
-    end
-    local t={} ; i=1
-    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-        t[i] = str
-        i = i + 1
-    end
-    return t
-end
-
-
-
-function tablelength(T)
-	local count = 0
-	for _ in pairs(T) do count = count + 1 end
-	return count
-end
-
-
-
-versionChecker = true -- Set to false to disable version checker
-
-
-
--- Don't touch
-resourcename = "RPCommands"
-version = "1.0.1"
-rawVersionLink = "https://raw.githubusercontent.com/Swqppingg/RPCommands/main/version.txt"
-
-
--- Check for version updates.
-if versionChecker then
-PerformHttpRequest(rawVersionLink, function(errorCode, result, headers)
-    if (string.find(tostring(result), version) == nil) then
-        print("\n\r[".. GetCurrentResourceName() .."] ^1WARNING: Your version of ".. resourcename .." is not up to date. Please make sure to update whenever possible.\n\r")
+    local isItalic = (commandKey == "me" or commandKey == "do")
+    local template
+    if isItalic then
+        template = string.format('<div style="color: %s; font-style: italic;"><b>* %s | %s</b> %s <b>*</b></div>', chatColor, cfg.title, displayName, message)
     else
-        print("\n\r[".. GetCurrentResourceName() .."] ^2You are running the latest version of ".. resourcename ..".\n\r")
+        template = string.format('<div><b style="color: %s;">%s | %s</b>: %s</div>', chatColor, cfg.title, displayName, message)
     end
-end, "GET", "", "")
+    local function SendToPlayer(targetId)
+        TriggerClientEvent('chat:addMessage', targetId, { template = template })
+    end
+    if cfg.distance then
+        local sourcePed = GetPlayerPed(source)
+        local sourceCoords = GetEntityCoords(sourcePed)
+        SendToPlayer(source)
+        for _, targetId in ipairs(GetPlayers()) do
+            local tid = tonumber(targetId)
+            if tid ~= source then
+                local targetPed = GetPlayerPed(tid)
+                local targetCoords = GetEntityCoords(targetPed)
+                if #(sourceCoords - targetCoords) < cfg.distance then
+                    SendToPlayer(tid)
+                end
+            end
+        end
+    else
+        TriggerClientEvent('chat:addMessage', -1, { template = template })
+    end
+    if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
+        local embedColor = HexToDec(chatColor)
+        local cleanName = StripColorCodes(logDisplayName)
+        local displayIdentity = cleanName
+        if commandKey == "darkweb" then
+            displayIdentity = cleanName .. " (" .. displayName .. ")"
+        end
+        local cleanMessage = StripColorCodes(message)
+        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
+            json.encode({
+                username = "RP Logs", 
+                embeds = {{
+                    title = cfg.webhook or cfg.title,
+                    description = "**Player:** " .. displayIdentity .. "\n**Message:** " .. cleanMessage,
+                    color = embedColor,
+                    footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
+                }},
+                avatar_url = DISCORD_IMAGE
+            }), 
+            { ['Content-Type'] = 'application/json' })
+    end
 end
+
+RegisterNetEvent('requestCommandSuggestions')
+AddEventHandler('requestCommandSuggestions', function()
+    local source = source
+    local hasDispatchAccess = false
+    local player = QBCore.Functions.GetPlayer(source)
+    if player and Config.DispatchJobs[player.PlayerData.job.name] then
+        hasDispatchAccess = true
+    end
+    TriggerClientEvent('addCommandSuggestions', source, hasDispatchAccess)
+end)
+
+local function RegisterAllCommands()
+    for cmdName, cfg in pairs(Config.Commands) do
+        if cfg.enabled and not cfg.server_only and not cfg.client_side then
+            RegisterCommand(cmdName, function(source, args, raw)
+                sendRoleplayMessage(source, args, cmdName)
+            end, false)
+        end
+    end
+    if Config.Commands["dispatch"] and Config.Commands["dispatch"].enabled then
+        RegisterCommand("dispatch", function(source, args, raw)
+            local player = QBCore.Functions.GetPlayer(source)
+            local jobName = player and player.PlayerData.job.name
+            local jobCfg = jobName and Config.DispatchJobs[jobName]
+            if not player or not jobCfg then
+                TriggerClientEvent('chatMessage', source, "^1ERROR: ^0You don't have access to this command.")
+                return
+            end
+            if #args <= 0 then
+                TriggerClientEvent('chatMessage', source, Config.missingargs)
+                return
+            end
+            local jobLabel = jobCfg.label or player.PlayerData.job.label
+            local jobColor = (type(jobCfg.color) == "table") and string.format("#%02x%02x%02x", jobCfg.color[1], jobCfg.color[2], jobCfg.color[3]) or jobCfg.color
+            local displayName = GetPlayerDisplayName(source)
+            local message = table.concat(args, " ")
+            local playerName = GetPlayerName(source)
+            local template = string.format('<div><b style="color: #1da1f2;">Dispatch</b> | <b style="color: %s; font-weight: 900;">[%s]</b> <b>%s</b>: %s</div>', jobColor, jobLabel, displayName, message)
+            for _, targetId in ipairs(GetPlayers()) do
+                local tid = tonumber(targetId)
+                local targetPlayer = QBCore.Functions.GetPlayer(tid)
+                if targetPlayer and Config.DispatchJobs[targetPlayer.PlayerData.job.name] then
+                    TriggerClientEvent('chat:addMessage', tid, { template = template })
+                end
+            end
+            if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
+                local embedColor = HexToDec(jobColor)
+                local cleanName = StripColorCodes(displayName)
+                local cleanMessage = StripColorCodes(message)
+                PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
+                    json.encode({
+                        username = "RP Logs", 
+                        embeds = {{
+                            title = "Dispatch",
+                            description = "**From:** " .. cleanName .. " (**" .. jobLabel .. "**)\n**Message:** " .. cleanMessage,
+                            color = embedColor,
+                            footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
+                        }},
+                        avatar_url = DISCORD_IMAGE
+                    }), 
+                    { ['Content-Type'] = 'application/json' })
+            end
+        end, false)
+    end
+end
+
+RegisterNetEvent('QB-RPCommands:server:me', function(args)
+    sendRoleplayMessage(source, args, "me")
+end)
+
+RegisterNetEvent('QB-RPCommands:server:do', function(args)
+    sendRoleplayMessage(source, args, "do")
+end)
+
+RegisterNetEvent('QB-RPCommands:server:showid', function()
+    local source = source
+    local player = QBCore.Functions.GetPlayer(source)
+    if not player then return end
+    local charinfo = player.PlayerData.charinfo
+    local firstName = charinfo.firstname
+    local lastName = charinfo.lastname
+    local gender = charinfo.gender
+    local birthdate = charinfo.birthdate or "Unknown"
+    local idNumber = source
+    local playerName = GetPlayerName(source)
+    local age = GetAge(birthdate)
+    local displayName = GetPlayerDisplayName(source)
+    TriggerClientEvent("sendMessageShowID", -1, source, displayName, firstName, lastName, gender, birthdate, age, idNumber)
+    if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
+        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
+            json.encode({
+                username = "RP Logs", 
+                embeds = {{
+                    title = "ID Card Shown",
+                    fields = {
+                        { name = "Shown By", value = displayName, inline = true },
+                        { name = "Legal Name", value = firstName .. " " .. lastName, inline = true },
+                        { name = "Age/DOB", value = age .. " (" .. birthdate .. ")", inline = true },
+                        { name = "ID/Name", value = idNumber .. " (" .. playerName .. ")", inline = false }
+                    },
+                    color = 15158332,
+                }},
+                avatar_url = DISCORD_IMAGE
+            }), 
+            { ['Content-Type'] = 'application/json' })
+    end
+end)
+
+RegisterAllCommands()
+
+if Config.enableCommandOverride then
+    Citizen.CreateThread(function()
+        Wait(5000)
+        RegisterAllCommands()
+        Wait(25000)
+        RegisterAllCommands()
+    end)
+end
+
+RegisterCommand("refreshrpcommands", function(source, args, raw)
+    if source == 0 or QBCore.Functions.HasPermission(source, 'admin') then
+        RegisterAllCommands()
+        if source ~= 0 then TriggerClientEvent('chatMessage', source, "^2SUCCESS: ^0RP Commands have been refreshed.") end
+    end
+end, false)
+
+AddEventHandler('playerDropped', function()
+    PlayerSeeds[source] = nil
+end)
