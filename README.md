@@ -44,13 +44,35 @@ Config.Commands = {
     ["twt"] = {
         enabled = true, -- Enable or disable the command
         override = true, -- Enable or disable the command override
-        distance = false, -- Enable or disable the command distance (false = global, put a number for the distance in meters)
+        distance = false, -- false = global, number = fixed range, function(...) = dynamic range
         title = "TWITTER", -- The title of the command shown in chat
         color = "#1da1f2", -- The color of the command shown in chat
         webhook = "TWITTER", -- The title of the command shown in the webhook
         help = "Send a global tweet" -- The help text of the command
     },
     -- ... other commands
+}
+```
+
+### Dynamic Distance (Default: pma-voice)
+Nearby commands can use live voice range by setting `distance` to a function.
+Use one optional provider in config (`Config.DistanceProvider`) and call `Config.GetDynamicDistance(source)`:
+
+```lua
+["me"] = {
+    enabled = true,
+    distance = function(source, commandName, commandCfg)
+        return Config.GetDynamicDistance(source)
+    end
+}
+```
+
+You can still use fixed numeric ranges:
+
+```lua
+["do"] = {
+    enabled = true,
+    distance = 12.0
 }
 ```
 

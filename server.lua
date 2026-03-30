@@ -1,9 +1,17 @@
-QBCore = exports['qb-core']:GetCoreObject()
+local QBCore = exports['qb-core']:GetCoreObject()
+
+-- ==========================
+-- ### INITIALIZATION LOGIC ###
+-- ==========================
 
 Citizen.CreateThread(function()
-    Citizen.Wait(1000)
+    Wait(1000)
     print("^3[QB-RPCommands]^7 Initialized successfully")
 end)
+
+-- ========================
+-- ### HELPER FUNCTIONS ###
+-- ========================
 
 local function GetAge(birthdate)
     if not birthdate or birthdate == "Unknown" then return "N/A" end
@@ -15,6 +23,7 @@ local function GetAge(birthdate)
 end
 
 local function GetPlayerDisplayName(source)
+    if source == 0 then return "Console" end
     local player = QBCore.Functions.GetPlayer(source)
     if not player then return GetPlayerName(source) end
     local charinfo = player.PlayerData.charinfo
@@ -22,24 +31,6 @@ local function GetPlayerDisplayName(source)
     local qbName = charinfo.firstname .. " " .. initial .. "."
     local nickname = Config.GetNickname(source)
     return nickname or qbName
-end
-
-local function HasJobAccess(source, jobList)
-    local player = QBCore.Functions.GetPlayer(source)
-    if not player then return false end
-    local playerJob = player.PlayerData.job.name
-    for _, job in ipairs(jobList) do
-        if playerJob == job then return true end
-    end
-    return false
-end
-
-local PlayerSeeds = {}
-
-local function HexToRgb(hex)
-    hex = hex:gsub("#", "")
-    if #hex == 8 then hex = hex:sub(1, 6) end
-    return { tonumber("0x" .. hex:sub(1, 2)), tonumber("0x" .. hex:sub(3, 4)), tonumber("0x" .. hex:sub(5, 6)) }
 end
 
 local function HexToDec(hex)
@@ -58,39 +49,111 @@ local function StripColorCodes(text)
     return s
 end
 
+local function ResolveCommandDistance(source, commandKey, cfg)
+    if not cfg then return false end
+
+    local distance = cfg.distance
+    if distance == nil or distance == false then
+        return false
+    end
+
+    if type(distance) == "number" then
+        return distance > 0 and distance or false
+    end
+
+    if type(distance) == "function" then
+        local ok, resolved = pcall(distance, source, commandKey, cfg)
+        if not ok then
+            print(("[QB-RPCommands] Distance resolver failed for /%s: %s"):format(commandKey, resolved))
+            return false
+        end
+        resolved = tonumber(resolved)
+        if resolved and resolved > 0 then
+            return resolved
+        end
+        return false
+    end
+
+    print(("[QB-RPCommands] Invalid distance type for /%s. Use number, function, or false."):format(commandKey))
+    return false
+end
+
+-- =========================
+-- ### LOGGING FUNCTIONS ###
+-- =========================
+
+local function SendDiscordLog(title, description, color, source, playerName, fields)
+    if not Config.discordwebhooklink or Config.discordwebhooklink == "" then return end
+    
+    local payload = {
+        username = "RP Logs",
+        embeds = {{
+            title = title,
+            description = description,
+            color = HexToDec(color),
+            footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
+        }},
+        avatar_url = DISCORD_IMAGE
+    }
+
+    if fields then
+        payload.embeds[1].fields = fields
+        payload.embeds[1].description = nil
+    end
+
+    PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
+        json.encode(payload), { ['Content-Type'] = 'application/json' })
+end
+
+-- =====================
+-- ### CORE MESSAGING ###
+-- =====================
+
+local PlayerSeeds = {}
+
 local function sendRoleplayMessage(source, args, commandKey)
     local cfg = Config.Commands[commandKey]
     if not cfg then return end
+    
     if #args <= 0 then
         TriggerClientEvent('chatMessage', source, Config.missingargs)
         return
     end
+
     local player = QBCore.Functions.GetPlayer(source)
     if not player then return end
+
     local message = table.concat(args, " ")
     local playerName = GetPlayerName(source)
     local displayName = GetPlayerDisplayName(source)
     local logDisplayName = displayName
+
     if commandKey == "darkweb" then
         if not PlayerSeeds[source] then PlayerSeeds[source] = math.random(100, 999) end
         local charHash = string.sub(player.PlayerData.citizenid, #player.PlayerData.citizenid - 1)
         displayName = "User_" .. PlayerSeeds[source] .. charHash
     end
+
     local chatColor = cfg.color
     if type(chatColor) == "table" then
         chatColor = string.format("#%02x%02x%02x", chatColor[1], chatColor[2], chatColor[3])
     end
+
     local isItalic = (commandKey == "me" or commandKey == "do")
+    local titleWithName = (cfg.title or "") .. displayName
     local template
     if isItalic then
-        template = string.format('<div style="color: %s; font-style: italic;"><b>* %s | %s</b> %s <b>*</b></div>', chatColor, cfg.title, displayName, message)
+        template = string.format('<div style="color: %s; font-style: italic;"><b>* %s</b> %s <b>*</b></div>', chatColor, titleWithName, message)
     else
-        template = string.format('<div><b style="color: %s;">%s | %s</b>: %s</div>', chatColor, cfg.title, displayName, message)
+        template = string.format('<div><b style="color: %s;">%s</b>: %s</div>', chatColor, titleWithName, message)
     end
+
     local function SendToPlayer(targetId)
         TriggerClientEvent('chat:addMessage', targetId, { template = template })
     end
-    if cfg.distance then
+
+    local maxDistance = ResolveCommandDistance(source, commandKey, cfg)
+    if maxDistance then
         local sourcePed = GetPlayerPed(source)
         local sourceCoords = GetEntityCoords(sourcePed)
         SendToPlayer(source)
@@ -99,7 +162,7 @@ local function sendRoleplayMessage(source, args, commandKey)
             if tid ~= source then
                 local targetPed = GetPlayerPed(tid)
                 local targetCoords = GetEntityCoords(targetPed)
-                if #(sourceCoords - targetCoords) < cfg.distance then
+                if #(sourceCoords - targetCoords) < maxDistance then
                     SendToPlayer(tid)
                 end
             end
@@ -107,28 +170,18 @@ local function sendRoleplayMessage(source, args, commandKey)
     else
         TriggerClientEvent('chat:addMessage', -1, { template = template })
     end
-    if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
-        local embedColor = HexToDec(chatColor)
-        local cleanName = StripColorCodes(logDisplayName)
-        local displayIdentity = cleanName
-        if commandKey == "darkweb" then
-            displayIdentity = cleanName .. " (" .. displayName .. ")"
-        end
-        local cleanMessage = StripColorCodes(message)
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
-            json.encode({
-                username = "RP Logs", 
-                embeds = {{
-                    title = cfg.webhook or cfg.title,
-                    description = "**Player:** " .. displayIdentity .. "\n**Message:** " .. cleanMessage,
-                    color = embedColor,
-                    footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
-                }},
-                avatar_url = DISCORD_IMAGE
-            }), 
-            { ['Content-Type'] = 'application/json' })
+
+    -- Discord Logging
+    local displayIdentity = StripColorCodes(logDisplayName)
+    if commandKey == "darkweb" then
+        displayIdentity = displayIdentity .. " (" .. displayName .. ")"
     end
+    SendDiscordLog(cfg.webhook or cfg.title, "**Player:** " .. displayIdentity .. "\n**Message:** " .. StripColorCodes(message), chatColor, source, playerName)
 end
+
+-- ========================
+-- ### COMMAND HANDLERS ###
+-- ========================
 
 RegisterNetEvent('requestCommandSuggestions')
 AddEventHandler('requestCommandSuggestions', function()
@@ -149,25 +202,37 @@ local function RegisterAllCommands()
             end, false)
         end
     end
+
+    -- Special handling for /dispatch
     if Config.Commands["dispatch"] and Config.Commands["dispatch"].enabled then
         RegisterCommand("dispatch", function(source, args, raw)
+            if source == 0 then
+                print("^1ERROR: ^0This command can only be used by players.")
+                return
+            end
+
             local player = QBCore.Functions.GetPlayer(source)
             local jobName = player and player.PlayerData.job.name
             local jobCfg = jobName and Config.DispatchJobs[jobName]
+
             if not player or not jobCfg then
                 TriggerClientEvent('chatMessage', source, "^1ERROR: ^0You don't have access to this command.")
                 return
             end
+
             if #args <= 0 then
                 TriggerClientEvent('chatMessage', source, Config.missingargs)
                 return
             end
+
             local jobLabel = jobCfg.label or player.PlayerData.job.label
             local jobColor = (type(jobCfg.color) == "table") and string.format("#%02x%02x%02x", jobCfg.color[1], jobCfg.color[2], jobCfg.color[3]) or jobCfg.color
             local displayName = GetPlayerDisplayName(source)
             local message = table.concat(args, " ")
             local playerName = GetPlayerName(source)
+
             local template = string.format('<div><b style="color: #1da1f2;">Dispatch</b> | <b style="color: %s; font-weight: 900;">[%s]</b> <b>%s</b>: %s</div>', jobColor, jobLabel, displayName, message)
+            
             for _, targetId in ipairs(GetPlayers()) do
                 local tid = tonumber(targetId)
                 local targetPlayer = QBCore.Functions.GetPlayer(tid)
@@ -175,26 +240,15 @@ local function RegisterAllCommands()
                     TriggerClientEvent('chat:addMessage', tid, { template = template })
                 end
             end
-            if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
-                local embedColor = HexToDec(jobColor)
-                local cleanName = StripColorCodes(displayName)
-                local cleanMessage = StripColorCodes(message)
-                PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
-                    json.encode({
-                        username = "RP Logs", 
-                        embeds = {{
-                            title = "Dispatch",
-                            description = "**From:** " .. cleanName .. " (**" .. jobLabel .. "**)\n**Message:** " .. cleanMessage,
-                            color = embedColor,
-                            footer = { text = "System ID: " .. source .. " | Name: " .. playerName }
-                        }},
-                        avatar_url = DISCORD_IMAGE
-                    }), 
-                    { ['Content-Type'] = 'application/json' })
-            end
+            
+            SendDiscordLog("Dispatch", "**From:** " .. StripColorCodes(displayName) .. " (**" .. jobLabel .. "**)\n**Message:** " .. StripColorCodes(message), jobColor, source, playerName)
         end, false)
     end
 end
+
+-- =====================
+-- ### COMMAND EVENTS ###
+-- =====================
 
 RegisterNetEvent('QB-RPCommands:server:me', function(args)
     sendRoleplayMessage(source, args, "me")
@@ -208,6 +262,7 @@ RegisterNetEvent('QB-RPCommands:server:showid', function()
     local source = source
     local player = QBCore.Functions.GetPlayer(source)
     if not player then return end
+
     local charinfo = player.PlayerData.charinfo
     local firstName = charinfo.firstname
     local lastName = charinfo.lastname
@@ -217,26 +272,41 @@ RegisterNetEvent('QB-RPCommands:server:showid', function()
     local playerName = GetPlayerName(source)
     local age = GetAge(birthdate)
     local displayName = GetPlayerDisplayName(source)
-    TriggerClientEvent("sendMessageShowID", -1, source, displayName, firstName, lastName, gender, birthdate, age, idNumber)
-    if Config.discordwebhooklink and Config.discordwebhooklink ~= "" then
-        PerformHttpRequest(Config.discordwebhooklink, function(err, text, headers) end, 'POST', 
-            json.encode({
-                username = "RP Logs", 
-                embeds = {{
-                    title = "ID Card Shown",
-                    fields = {
-                        { name = "Shown By", value = displayName, inline = true },
-                        { name = "Legal Name", value = firstName .. " " .. lastName, inline = true },
-                        { name = "Age/DOB", value = age .. " (" .. birthdate .. ")", inline = true },
-                        { name = "ID/Name", value = idNumber .. " (" .. playerName .. ")", inline = false }
-                    },
-                    color = 15158332,
-                }},
-                avatar_url = DISCORD_IMAGE
-            }), 
-            { ['Content-Type'] = 'application/json' })
+    local showIdCfg = Config.Commands["showid"] or {}
+    local maxDistance = ResolveCommandDistance(source, "showid", showIdCfg)
+
+    if maxDistance then
+        local sourcePed = GetPlayerPed(source)
+        local sourceCoords = GetEntityCoords(sourcePed)
+
+        TriggerClientEvent("sendMessageShowID", source, source, displayName, firstName, lastName, gender, birthdate, age, idNumber, maxDistance)
+
+        for _, targetId in ipairs(GetPlayers()) do
+            local tid = tonumber(targetId)
+            if tid ~= source then
+                local targetPed = GetPlayerPed(tid)
+                local targetCoords = GetEntityCoords(targetPed)
+                if #(sourceCoords - targetCoords) < maxDistance then
+                    TriggerClientEvent("sendMessageShowID", tid, source, displayName, firstName, lastName, gender, birthdate, age, idNumber, maxDistance)
+                end
+            end
+        end
+    else
+        TriggerClientEvent("sendMessageShowID", -1, source, displayName, firstName, lastName, gender, birthdate, age, idNumber, false)
     end
+    
+    local fields = {
+        { name = "Shown By", value = StripColorCodes(displayName), inline = true },
+        { name = "Legal Name", value = firstName .. " " .. lastName, inline = true },
+        { name = "Age/DOB", value = age .. " (" .. birthdate .. ")", inline = true },
+        { name = "ID/Name", value = idNumber .. " (" .. playerName .. ")", inline = false }
+    }
+    SendDiscordLog("ID Card Shown", nil, "#ecf0f1", source, playerName, fields)
 end)
+
+-- ============================
+-- ### COMMAND REGISTRATION ###
+-- ============================
 
 RegisterAllCommands()
 
@@ -252,7 +322,9 @@ end
 RegisterCommand("refreshrpcommands", function(source, args, raw)
     if source == 0 or QBCore.Functions.HasPermission(source, 'admin') then
         RegisterAllCommands()
-        if source ~= 0 then TriggerClientEvent('chatMessage', source, "^2SUCCESS: ^0RP Commands have been refreshed.") end
+        if source ~= 0 then 
+            TriggerClientEvent('chatMessage', source, "^2SUCCESS: ^0RP Commands have been refreshed.") 
+        end
     end
 end, false)
 
